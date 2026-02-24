@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>2048 触屏完整版</title>
+<title>合成大+7</title>
 <style>
 * {
   margin: 0;
@@ -115,13 +115,13 @@ body {
 
   <!-- 胜利弹窗 -->
   <div id="winModal" class="modal">
-    <div class="modal-text">🎉 恭喜胜利！</div>
+    <div class="modal-text">🎉 恭喜你合成了马+7！</div>
     <button class="restart-btn" onclick="restartGame()">再来一局</button>
   </div>
 
   <!-- 失败弹窗 -->
   <div id="loseModal" class="modal">
-    <div class="modal-text">💥 游戏结束</div>
+    <div class="modal-text">💥 小马请你继续努力</div>
     <button class="restart-btn" onclick="restartGame()">重新开始</button>
   </div>
 </div>
@@ -317,4 +317,5 @@ function moveLeft()  { return move(0,  0, 1); }
  }
  </script>
 </body>
+
 </html>    
