@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>2048 触屏完整版</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background: #faf8ef;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  position: relative;
+}
+
+#game {
+  width: 90vw;
+  max-width: 400px;
+  position: relative;
+}
+
+#score {
+  font-size: 26px;
+  margin: 10px 0;
+  color: #776e65;
+  font-weight: bold;
+  text-align: center;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  background: #bbada0;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  background: #cdc1b4;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #776e65;
+  position: relative;
+}
+
+.cell img {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+  display: block;
+}
+
+/* 胜负弹窗 */
+.modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  z-index: 10;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-text {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: white;
+  text-shadow: 0 2px 4px #000;
+}
+
+.restart-btn {
+  padding: 12px 24px;
+  background: #8f7a66;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.restart-btn:active {
+  background: #776e65;
+}
+</style>
+</head>
+
+<body>
+<div id="game">
+  <div id="score">得分: 0</div>
+  <div id="board"></div>
+
+  <!-- 胜利弹窗 -->
+  <div id="winModal" class="modal">
+    <div class="modal-text">🎉 恭喜胜利！</div>
+    <button class="restart-btn" onclick="restartGame()">再来一局</button>
+  </div>
+
+  <!-- 失败弹窗 -->
+  <div id="loseModal" class="modal">
+    <div class="modal-text">💥 游戏结束</div>
+    <button class="restart-btn" onclick="restartGame()">重新开始</button>
+  </div>
+</div>
+
+<script>
+let board = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+let score = 0;
+let gameOver = false;
+let win = false;
+
+// 触屏
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+// 音效（滑动/合并）
+const moveSound = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-select-click-1109.mp3");
+const mergeSound = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3");
+const winSound = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3");
+const loseSound = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-losing-bleeps-2026.mp3");
+
+document.addEventListener('DOMContentLoaded', () => {
+  init();
+  bindEvents();
+});
+
+// 初始化
+function init() {
+  board = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+  score = 0;
+  gameOver = false;
+  win = false;
+  document.getElementById('winModal').classList.remove('show');
+  document.getElementById('loseModal').classList.remove('show');
+  addRandom();
+  addRandom();
+  render();
+}
+
+// 渲染图片
+function render() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if (board[i][j] !== 0) {
+        const img = document.createElement('img');
+        img.src = `${board[i][j]}.png`;
+        img.alt = board[i][j];
+        cell.appendChild(img);
+      }
+      boardEl.appendChild(cell);
+    }
+  }
+  document.getElementById('score').innerText = `得分: ${score}`;
+}
+
+// 随机生成
+function addRandom() {
+  let empty = [];
+  for (let i=0; i<4; i++)
+    for (let j=0; j<4; j++)
+      if (board[i][j] === 0) empty.push([i,j]);
+  if (empty.length === 0) return;
+  let [i,j] = empty[Math.floor(Math.random()*empty.length)];
+  board[i][j] = Math.random() < 0.9 ? 2 : 4;
+}
+
+// 移动逻辑
+function moveLeft()  { return move(0,  0, 1); }
+ function moveRight() { return move(0, 3, -1); }
+ function moveUp()    { return move(1, 0, 1); }
+ function moveDown()  { return move(1, 3, -1); }
+ function move(dir, start, step) {
+   if (gameOver || win) return;
+   let old = JSON.stringify(board);
+   let hasMerge = false;
+   for (let x = 0; x < 4; x++) {
+     let line = [];
+     for (let y = 0; y < 4; y++) {
+       let val = dir === 0 ? board[x][y] : board[y][x];
+       if (val !== 0) line.push(val);
+     }
+     let merged = [];
+     let i = 0;
+     while (i < line.length) {
+       if (i+1 < line.length && line[i] === line[i+1]) {
+         let v = line[i]*2;
+         merged.push(v);
+         score += v;
+         hasMerge = true;
+         i += 2;
+       } else {
+         merged.push(line[i]);
+         i++;
+       }
+     }
+     let full = Array(4).fill(0);
+     if (step === 1) {
+       for (let k=0; k<merged.length; k++) full[k] = merged[k];
+     } else {
+       for (let k=0; k<merged.length; k++) full[3 - k] = merged[merged.length-1 - k];
+     }
+     for (let y=0; y<4; y++) {
+       if (dir === 0) board[x][y] = full[y];
+       else board[y][x] = full[y];
+     }
+   }
+   if (old !== JSON.stringify(board)) {
+     playMoveSound();
+     if (hasMerge) playMergeSound();
+     addRandom();
+     checkWin();
+     checkLose();
+     render();
+   }
+ }
+ // 音效播放
+ function playMoveSound() {
+   moveSound.currentTime = 0;
+   moveSound.play().catch(()=>{});
+ }
+ function playMergeSound() {
+   mergeSound.currentTime = 0;
+   mergeSound.play().catch(()=>{});
+ }
+ function playWinSound() {
+   winSound.currentTime = 0;
+   winSound.play().catch(()=>{});
+ }
+ function playLoseSound() {
+   loseSound.currentTime = 0;
+   loseSound.play().catch(()=>{});
+ }
+ // 胜利判断（合成2048）
+ function checkWin() {
+   for (let i=0; i<4; i++)
+     for (let j=0; j<4; j++)
+       if (board[i][j] === 2048) {
+         win = true;
+         playWinSound();
+         document.getElementById('winModal').classList.add('show');
+         return;
+       }
+ }
+ // 失败判断
+ function checkLose() {
+   for (let i=0; i<4; i++)
+     for (let j=0; j<4; j++) {
+       if (board[i][j] === 0) return;
+       if (j<3 && board[i][j] === board[i][j+1]) return;
+       if (i<3 && board[i][j] === board[i+1][j]) return;
+     }
+   gameOver = true;
+   playLoseSound();
+   document.getElementById('loseModal').classList.add('show');
+ }
+ // 重新开始
+ function restartGame() {
+   init();
+ }
+ // 键盘 + 触屏
+ function bindEvents() {
+   document.addEventListener('keydown', e => {
+     if (e.key === 'ArrowLeft') moveLeft();
+     if (e.key === 'ArrowRight') moveRight();
+     if (e.key === 'ArrowUp') moveUp();
+     if (e.key === 'ArrowDown') moveDown();
+   });
+   document.addEventListener('touchstart', e => {
+     touchStartX = e.changedTouches[0].screenX;
+     touchStartY = e.changedTouches[0].screenY;
+   });
+   document.addEventListener('touchend', e => {
+     touchEndX = e.changedTouches[0].screenX;
+     touchEndY = e.changedTouches[0].screenY;
+     handleSwipe();
+   });
+ }
+ function handleSwipe() {
+   const dx = touchEndX - touchStartX;
+   const dy = touchEndY - touchStartY;
+   if (Math.abs(dx) > Math.abs(dy)) {
+     if (dx > 20) moveRight();
+     if (dx < -20) moveLeft();
+   } else {
+     if (dy > 20) moveDown();
+     if (dy < -20) moveUp();
+   }
+ }
+ </script>
+</body>
+</html>    
